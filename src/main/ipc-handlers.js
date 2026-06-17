@@ -215,10 +215,18 @@ async function handleDownloadStart(
       const first = fallbacks[0];
       const used = formatLabel(first.usedFormat);
       const requested = formatLabel(first.requestedFormat);
-      const message =
-        fallbacks.length === 1
-          ? `No “${requested}” for this item — downloading ${used} instead.`
-          : `${fallbacks.length} item(s) had no “${requested}” — downloading ${used} instead.`;
+      // If different items fell back to DIFFERENT formats, don't claim a single
+      // one — use generic phrasing (M5).
+      const sameUsed = fallbacks.every((fb) => fb.usedFormat === first.usedFormat);
+      const sameRequested = fallbacks.every((fb) => fb.requestedFormat === first.requestedFormat);
+      let message;
+      if (fallbacks.length === 1) {
+        message = `No “${requested}” for this item — downloading ${used} instead.`;
+      } else if (sameUsed && sameRequested) {
+        message = `${fallbacks.length} item(s) had no “${requested}” — downloading ${used} instead.`;
+      } else {
+        message = `${fallbacks.length} item(s) didn’t have the chosen format — downloading the next-best available file instead.`;
+      }
       log.warn('download: format fallback', { requested: first.requestedFormat, used: first.usedFormat, items: fallbacks.length });
       send({ phase: 'notice', level: 'warn', message });
     }

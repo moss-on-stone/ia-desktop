@@ -32,6 +32,14 @@ test('isEmptySearch: an advanced search with no non-blank fields is empty', () =
   assert.equal(isEmptySearch({ type: 'advanced', fields: { mediatype: '   ' } }), true);
 });
 
+test('isEmptySearch: an array of only BLANK strings is empty (H2 — avoids *:* blowout)', () => {
+  // subject:[''] used to count as non-empty here but build *:* in the query —
+  // the exact gap that returned the whole 123M-item archive.
+  assert.equal(isEmptySearch({ type: 'advanced', fields: { subject: [''] } }), true);
+  assert.equal(isEmptySearch({ type: 'advanced', fields: { subject: ['', '  '] } }), true);
+  assert.equal(isEmptySearch({ type: 'advanced', fields: { subject: ['', 'China'] } }), false, 'one real subject → not empty');
+});
+
 test('isEmptySearch: a search with any real term is NOT empty', () => {
   assert.equal(isEmptySearch({ type: 'advanced', fields: { subject: ['China'] } }), false);
   assert.equal(isEmptySearch({ type: 'advanced', fields: { dateFrom: '1940-01-01' } }), false);

@@ -137,12 +137,13 @@ label input, label select, label textarea { margin-top: 5px; color: var(--text);
 .app { display: flex; flex-direction: column; height: 100vh; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 8px 16px; flex-wrap: wrap;
   padding: 10px 16px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
 }
-.topbar-left { display: flex; align-items: center; gap: 16px; }
-.tabs { display: flex; gap: 4px; }
+.topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; flex-wrap: wrap; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .tab {
   background: transparent; color: var(--muted);
   border-radius: 8px; padding: 7px 14px;
@@ -162,7 +163,7 @@ label input, label select, label textarea { margin-top: 5px; color: var(--text);
 }
 .tab-badge.badge-upload { background: var(--upload); }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
-.who { color: var(--muted); font-size: 13px; }
+.who { color: var(--muted); font-size: 13px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Clickable username → opens the user's archive.org profile. */
 .who-link { cursor: pointer; }
 .who-link:hover { color: var(--accent); text-decoration: underline; }
@@ -290,6 +291,9 @@ label input, label select, label textarea { margin-top: 5px; color: var(--text);
 .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
 .seg-btn:hover { background: var(--bg-elev2); color: var(--text); }
 .seg-btn.active, .seg-btn.active:hover { background: var(--accent); color: #fff; }
+/* When the active button is the right one, blend the divider into the fill so
+   there's no dark hairline over the accent (M6). */
+.seg-btn.active { border-left-color: var(--accent); }
 
 /* --------------------------- compact list view --------------------------- */
 .results.compact { display: flex; flex-direction: column; gap: 1px; }
@@ -325,9 +329,11 @@ label input, label select, label textarea { margin-top: 5px; color: var(--text);
 .results.compact[data-density='comfortable'] .card { padding-top: 12px; padding-bottom: 12px; }
 .results.compact[data-density='comfortable'] .title { font-size: 15px; }
 .results[data-density='compact'] { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-.results[data-density='compact'] .thumb { height: 110px; }
+/* Set flex-basis too — in the flex-column card, flex-basis (not height) decides
+   the thumb's box size, so height alone wouldn't change it (L2). */
+.results[data-density='compact'] .thumb { flex-basis: 110px; height: 110px; }
 .results[data-density='comfortable'] { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.results[data-density='comfortable'] .thumb { height: 180px; }
+.results[data-density='comfortable'] .thumb { flex-basis: 180px; height: 180px; }
 
 /* ------------------------------- subjects -------------------------------- */
 .subjects { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
@@ -337,7 +343,6 @@ label input, label select, label textarea { margin-top: 5px; color: var(--text);
   padding: 2px 7px; border-radius: 999px; white-space: nowrap;
 }
 
-.card { position: relative; }
 .card .pick-box {
   position: absolute; top: 8px; left: 8px; z-index: 2;
   width: 22px; height: 22px; cursor: pointer; accent-color: var(--accent);

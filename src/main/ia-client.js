@@ -271,6 +271,13 @@ function downloadFile({ url, destPath, expectedSize, onProgress, signal, force, 
         if (settled) return;
         settled = true;
         if (signal) signal.removeEventListener('abort', onAbort);
+        // Cancel the idle timeout so it can't fire (and destroy the socket) after
+        // we've already settled (L3 hygiene).
+        try {
+          req.setTimeout(0);
+        } catch {
+          /* request already torn down */
+        }
         if (pendingError) reject(pendingError);
         else resolve({ path: destPath, bytes: received, skipped: false });
       };
@@ -402,18 +409,35 @@ function uploadFile({
     }
     if (!derive) headers['x-archive-queue-derive'] = '0';
 
+    // Single-settle wrapper that also removes the abort listener and cancels the
+    // idle timer, so neither leaks/fires after the upload finishes (L3 hygiene).
+    let settled = false;
+    let onAbort = null;
+    const done = (err, value) => {
+      if (settled) return;
+      settled = true;
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+      try {
+        req.setTimeout(0);
+      } catch {
+        /* already torn down */
+      }
+      if (err) reject(err);
+      else resolve(value);
+    };
+
     const req = https.request(u, { method: 'PUT', headers }, (res) => {
       let body = '';
       res.on('data', (c) => (body += c));
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve({ identifier, remote, bytes: size });
+          done(null, { identifier, remote, bytes: size });
         } else {
-          reject(new IAError(`Upload failed (HTTP ${res.statusCode}) for ${remote}.`, { status: res.statusCode, body }));
+          done(new IAError(`Upload failed (HTTP ${res.statusCode}) for ${remote}.`, { status: res.statusCode, body }));
         }
       });
     });
-    req.on('error', (err) => reject(err));
+    req.on('error', (err) => done(err));
     // C1: idle timeout so a stalled upload (server stops reading) fails instead
     // of hanging the transfer queue forever. Resets on socket activity.
     if (timeoutMs > 0) {
@@ -430,14 +454,14 @@ function uploadFile({
     });
     stream.on('error', (err) => {
       req.destroy();
-      reject(err);
+      done(err);
     });
 
     if (signal) {
-      const onAbort = () => {
+      onAbort = () => {
         stream.destroy();
         req.destroy();
-        reject(new IAError('Upload cancelled.'));
+        done(new IAError('Upload cancelled.'));
       };
       if (signal.aborted) return onAbort();
       signal.addEventListener('abort', onAbort, { once: true });

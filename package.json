@@ -1,7 +1,7 @@
 {
   "name": "ia-desktop",
   "productName": "IA Desktop",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "A friendly desktop app for the Internet Archive — search, browse, download, and upload without the command line.",
   "main": "src/main/main.js",
   "author": "Moss on Stone <moss-on-stone@protonmail.com>",

@@ -127,6 +127,16 @@ test('applyFacetToSearch REPLACES collection (one at a time)', () => {
   assert.equal(out.fields.collection, 'bar', 'collection replaced, not accumulated');
 });
 
+test('applyFacetToSearch ignores a blank value (no subject:[""] or date:[-01-01...]) (M3)', () => {
+  const start = { type: 'advanced', fields: { title: 'x' } };
+  // A blank subject must NOT add an empty entry.
+  assert.deepEqual(applyFacetToSearch(start, 'subject', '').fields, { title: 'x' });
+  // A blank year must NOT produce date:[-01-01 TO -12-31].
+  const y = applyFacetToSearch(start, 'year', '');
+  assert.ok(!('dateFrom' in y.fields), 'no dateFrom from a blank year');
+  assert.deepEqual(applyFacetToSearch(start, 'mediatype', '   ').fields, { title: 'x' });
+});
+
 test('applyFacetToSearch REPLACES language / mediatype / year (one at a time)', () => {
   assert.equal(applyFacetToSearch({ type: 'advanced', fields: { language: 'eng' } }, 'language', 'jpn').fields.language, 'jpn');
   assert.equal(applyFacetToSearch({ type: 'advanced', fields: { mediatype: 'texts' } }, 'mediatype', 'audio').fields.mediatype, 'audio');

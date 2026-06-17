@@ -258,6 +258,31 @@ test('active-filter chips: body searches just that term, only the × removes it'
   assert.match(css, /\.chip-x\s*\{/, 'expected a .chip-x style');
 });
 
+test('H4: topbar wraps and the username ellipsizes so it does not overflow narrow widths', () => {
+  const m = css.match(/\.topbar\s*\{([^}]*)\}/);
+  assert.ok(m, 'expected a .topbar rule');
+  assert.match(m[1], /flex-wrap\s*:\s*wrap/, 'topbar must wrap at narrow widths');
+  const who = css.match(/\.who\s*\{([^}]*)\}/);
+  assert.ok(who, 'expected a .who rule');
+  assert.match(who[1], /max-width/, '#who needs a max-width');
+  assert.match(who[1], /text-overflow\s*:\s*ellipsis/, '#who must ellipsize a long username');
+});
+
+test('M6: the segmented control active button blends the divider (no dark seam)', () => {
+  // When the 2nd button is active, the border-left divider must not draw a dark
+  // hairline over the accent fill.
+  assert.match(
+    css,
+    /\.seg-btn\.active[^{]*\{[^}]*border-left-color\s*:/,
+    'active seg button should override border-left-color'
+  );
+});
+
+test('M7: no U+2913 (⤓) glyph that tofus on Windows', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), 'utf8');
+  assert.ok(!html.includes('⤓'), 'the ⤓ (U+2913) glyph risks tofu on Windows — use a safe one');
+});
+
 test('toolbar/select-bar wraps so it does not break at small window widths', () => {
   const m = css.match(/\.select-bar\s*\{([^}]*)\}/);
   assert.ok(m, 'expected a .select-bar rule');
@@ -297,7 +322,7 @@ test('a yes/no confirm modal exists and the collection download uses it for >50 
   const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), 'utf8');
   assert.match(html, /id="confirm-modal"/, 'expected a #confirm-modal');
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'renderer.js'), 'utf8');
-  assert.match(src, /largeCollectionWarning\(numFound/, 'collection download must check largeCollectionWarning');
+  assert.match(src, /largeCollectionWarning\(collectionDownloadCount/, 'collection download must check largeCollectionWarning with the captured count (M8)');
   assert.match(src, /confirmDialog\(/, 'must confirm before a large collection download');
 });
 

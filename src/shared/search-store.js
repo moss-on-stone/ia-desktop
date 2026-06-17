@@ -33,7 +33,9 @@
 
   function isBlankValue(v) {
     if (v == null) return true;
-    if (Array.isArray(v)) return v.length === 0;
+    // An array is blank when EVERY element is blank — `['']` must count as empty
+    // (H2), since buildAdvancedQuery strips blank entries and would yield *:*.
+    if (Array.isArray(v)) return v.every(isBlankValue);
     return String(v).trim() === '';
   }
 

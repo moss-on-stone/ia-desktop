@@ -277,6 +277,11 @@ function clearSearchView() {
   filteredDocs = [];
   numFound = 0;
   selected.clear();
+  // A clear is a true reset point — drop the back-stack so the Back button can't
+  // jump to pre-clear searches, and don't let a stale lastRunSearch be pushed (H3).
+  searchHistory = [];
+  lastRunSearch = null;
+  navigatingBack = false;
   $('#results').innerHTML = '';
   $('#results-meta').textContent = '';
   $('#active-facets').innerHTML = '';
@@ -285,9 +290,14 @@ function clearSearchView() {
   $('#select-bar').hidden = true;
   $('#search-empty').hidden = false;
   $('#select-count').hidden = true;
+  updateBackButton();
 }
 
 async function runSearch(page = 1) {
+  // M2: clear the "navigating back" flag up front so an early return below can't
+  // leave it stuck true (which would drop the next search's history push).
+  const wasNavigatingBack = navigatingBack;
+  navigatingBack = false;
   if (!activeSearch) return;
   // When every filter has been removed, treat it as a cleared search and show an
   // empty view — never run *:* (which would return the entire 123M-item archive).
@@ -300,18 +310,19 @@ async function runSearch(page = 1) {
   const sig = searchStore.searchSignature(activeSearch);
   if (sig !== currentSearchSig) {
     selected.clear();
-    // Back-stack: a new distinct search pushes the one it's replacing (unless we
-    // got here by pressing Back, or it's a duplicate of the top of the stack).
-    if (!navigatingBack && lastRunSearch) {
+    // Back-stack: a new distinct search pushes the one it's replacing — unless we
+    // got here by pressing Back, or the candidate already sits on top of the
+    // stack (M4: de-dup against the CANDIDATE, not the replaced search).
+    if (!wasNavigatingBack && lastRunSearch) {
+      const candidateSig = searchStore.searchSignature(lastRunSearch);
       const topSig = searchHistory.length ? searchStore.searchSignature(searchHistory[searchHistory.length - 1]) : null;
-      if (searchStore.searchSignature(lastRunSearch) !== sig && topSig !== currentSearchSig) {
+      if (candidateSig !== sig && candidateSig !== topSig) {
         searchHistory.push(lastRunSearch);
       }
     }
     currentSearchSig = sig;
     updateBackButton();
   }
-  navigatingBack = false;
   lastRunSearch = activeSearch;
   currentPage = page;
   // #10: the live title filter applies to the current page only — reset on a new fetch.
@@ -986,22 +997,21 @@ function applySearch(search) {
   if (!search) return;
   if (search.type === 'advanced') {
     const f = search.fields || {};
+    // Populate the visible advanced form for display. A multi-subject array is
+    // shown comma-joined in the (single-line) subject input.
     $('#adv-title').value = f.title || '';
-    $('#adv-subject').value = f.subject || '';
+    $('#adv-subject').value = Array.isArray(f.subject) ? f.subject.join(', ') : f.subject || '';
     $('#adv-creator').value = f.creator || '';
     $('#adv-language').value = f.language || '';
     $('#adv-date-from').value = f.dateFrom || '';
     $('#adv-date-to').value = f.dateTo || '';
-    const mt = new Set(f.mediatype || []);
+    const mt = new Set(Array.isArray(f.mediatype) ? f.mediatype : f.mediatype ? [f.mediatype] : []);
     document.querySelectorAll('.adv-mt').forEach((c) => (c.checked = mt.has(c.value)));
-    // Carry through fields with no visible form input (e.g. collection,
-    // identifier, text) so restoring a saved/back-navigated search doesn't drop
-    // them — the form fields take precedence; the extras are preserved.
-    const formFields = collectAdvFields();
-    const FORM_KEYS = new Set(Object.keys(formFields));
-    const extras = {};
-    for (const [k, v] of Object.entries(f)) if (!FORM_KEYS.has(k)) extras[k] = v;
-    activeSearch = { type: 'advanced', fields: { ...extras, ...formFields } };
+    // The descriptor IS the source of truth on restore — use its fields verbatim
+    // (M1) rather than re-deriving from the form, so fields with no/incomplete
+    // form mapping (mediatype values outside the checkbox set, multi-subject
+    // arrays, collection, identifier, text) are preserved exactly.
+    activeSearch = { type: 'advanced', fields: { ...f } };
     runSearch(1);
   } else {
     $('#search-input').value = search.q || '';
@@ -1467,9 +1477,9 @@ async function downloadCollection(collection) {
 $('#download-collection').addEventListener('click', async () => {
   const id = activeCollectionId();
   if (!id) return;
-  // Confirm before pulling a large collection (the current result count is the
-  // collection's size when this button is shown).
-  const warning = uiUtil.largeCollectionWarning(numFound, id);
+  // Confirm before pulling a large collection — use the count captured when the
+  // button was shown for this collection (M8), not a possibly-stale live count.
+  const warning = uiUtil.largeCollectionWarning(collectionDownloadCount, id);
   if (warning && !(await confirmDialog(warning))) return;
   downloadCollection(id);
 });
@@ -1484,6 +1494,10 @@ function activeCollectionId() {
 }
 
 /** Show/hide the collection-download button based on the active search (#15). */
+// The collection size captured at the moment the Download-collection button was
+// last shown — so the >50 confirm uses a count that matches the visible button,
+// not a live numFound that a later in-flight search might have changed (M8).
+let collectionDownloadCount = 0;
 function updateCollectionDownloadButton() {
   const id = activeCollectionId();
   const btn = $('#download-collection');
@@ -1491,6 +1505,7 @@ function updateCollectionDownloadButton() {
     btn.hidden = !id;
     btn.title = id ? `Download every item in “${id}”` : '';
   }
+  collectionDownloadCount = id ? numFound : 0;
 }
 
 /* ----------------------- transfers badge (one-at-a-time) ------------------ */
@@ -2375,4 +2390,7 @@ function demoQueue() {
   start();
 })();
 
-if (!/[#&]demo=/.test(location.hash || '')) refreshAuth();
+if (!/[#&]demo=/.test(location.hash || '')) {
+  // Surface a boot-time auth failure instead of silently swallowing it (L6).
+  refreshAuth().catch((e) => toast(e.message || 'Could not check sign-in status.', 'err'));
+}

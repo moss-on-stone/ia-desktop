@@ -13,11 +13,17 @@
  *   clause AND clause        conjunction
  */
 
-/** Quote a field value if it contains whitespace; escape embedded quotes. */
+/**
+ * Quote a field value if it contains whitespace OR any Lucene special character,
+ * and escape embedded quotes (H1). A bare paren/bracket/colon in a value would
+ * otherwise unbalance the surrounding `field:(...)` clause and make archive.org
+ * reject the query. Inside quotes these are literals, so quoting is sufficient.
+ */
 function escapeFieldValue(value) {
   const s = String(value).trim();
   const escaped = s.replace(/"/g, '\\"');
-  return /\s/.test(s) ? `"${escaped}"` : escaped;
+  // Whitespace, parens, brackets, braces, colon, or a quote → must be quoted.
+  return /[\s()[\]{}":]/.test(s) ? `"${escaped}"` : escaped;
 }
 
 function isBlank(v) {
@@ -56,17 +62,20 @@ function lastDayOfMonth(year, month) {
 
 /**
  * Normalize a year-range bound to a full ISO date (#11). Accepts:
- *   YYYY        → 'from' = YYYY-01-01, 'to' = YYYY-12-31
- *   YYYY-MM     → first/last day of that month ('YYYY-M' single-digit ok)
- *   YYYY-MM-DD  → passed through unchanged (idempotent)
- * Anything else (already a wildcard, partial, or non-matching) is returned as-is
- * so existing full-date callers are unaffected.
+ *   YYYY         → 'from' = YYYY-01-01, 'to' = YYYY-12-31
+ *   YYYY-M[M]    → first/last day of that month (single-digit month padded)
+ *   YYYY-M[M]-D[D] → zero-padded to YYYY-MM-DD (single-digit day padded too, L1)
+ *   *            → the wildcard, passed through
+ * Anything else (junk, bogus month/day) returns `null` so the caller DROPS the
+ * bound to a wildcard instead of emitting an invalid Lucene range (L1).
  *
  * @param {string} raw the user/UI value
  * @param {'from'|'to'} which which end of the range this is
+ * @returns {string|null} a full ISO date / '*' , or null when unparseable
  */
 function normalizeDateBound(raw, which) {
   const s = String(raw == null ? '' : raw).trim();
+  if (s === '*') return '*';
   let m;
   if ((m = /^(\d{4})$/.exec(s))) {
     return which === 'to' ? `${m[1]}-12-31` : `${m[1]}-01-01`;
@@ -74,12 +83,19 @@ function normalizeDateBound(raw, which) {
   if ((m = /^(\d{4})-(\d{1,2})$/.exec(s))) {
     const year = Number(m[1]);
     const month = Number(m[2]);
-    if (month < 1 || month > 12) return s; // bogus month — leave it for the user to fix
+    if (month < 1 || month > 12) return null; // bogus month → drop the bound
     const mm = String(month).padStart(2, '0');
     const day = which === 'to' ? lastDayOfMonth(year, month) : 1;
     return `${m[1]}-${mm}-${String(day).padStart(2, '0')}`;
   }
-  return s;
+  if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s))) {
+    const year = Number(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    if (month < 1 || month > 12 || day < 1 || day > lastDayOfMonth(year, month)) return null;
+    return `${m[1]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+  return null; // unparseable junk → drop the bound
 }
 
 /** Build a `field:(...)` clause, OR-joining array values. */
@@ -132,10 +148,12 @@ function buildAdvancedQuery(f = {}) {
   if (mt) clauses.push(mt);
 
   if (!isBlank(f.dateFrom) || !isBlank(f.dateTo)) {
-    // Expand bare years / YYYY-MM months to full ISO bounds (#11).
-    const from = isBlank(f.dateFrom) ? '*' : normalizeDateBound(f.dateFrom, 'from');
-    const to = isBlank(f.dateTo) ? '*' : normalizeDateBound(f.dateTo, 'to');
-    clauses.push(`date:[${from} TO ${to}]`);
+    // Expand bare years / YYYY-MM months to full ISO bounds (#11). A bound that
+    // doesn't parse (junk / bogus month) drops to the '*' wildcard (L1).
+    const from = isBlank(f.dateFrom) ? '*' : normalizeDateBound(f.dateFrom, 'from') || '*';
+    const to = isBlank(f.dateTo) ? '*' : normalizeDateBound(f.dateTo, 'to') || '*';
+    // Only emit a date clause if at least one bound is real (not '* TO *').
+    if (!(from === '*' && to === '*')) clauses.push(`date:[${from} TO ${to}]`);
   }
 
   return clauses.length ? clauses.join(' AND ') : '*:*';

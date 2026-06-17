@@ -24,6 +24,24 @@ test('escapeFieldValue escapes embedded double quotes', () => {
   assert.equal(escapeFieldValue('say "hi"'), '"say \\"hi\\""');
 });
 
+test('escapeFieldValue QUOTES values with parens so they cannot unbalance field:() (H1)', () => {
+  // A bare paren used to pass through raw, breaking field:(...) into an
+  // unbalanced query that archive.org rejects.
+  assert.equal(escapeFieldValue('name)'), '"name)"');
+  assert.equal(escapeFieldValue('x(y'), '"x(y"');
+  assert.equal(escapeFieldValue('a)b(c'), '"a)b(c"');
+});
+
+test('escapeFieldValue quotes values with other Lucene specials (brackets, colon) (H1)', () => {
+  assert.equal(escapeFieldValue('a:b'), '"a:b"');
+  assert.equal(escapeFieldValue('a[b]'), '"a[b]"');
+});
+
+test('buildAdvancedQuery with a paren in a field value stays balanced (H1)', () => {
+  assert.equal(buildAdvancedQuery({ creator: 'name)' }), 'creator:("name)")');
+  assert.equal(buildAdvancedQuery({ identifier: 'x(y' }), 'identifier:("x(y")');
+});
+
 /* --------------------------- field combinations --------------------------- */
 
 test('combines title and subject with AND', () => {
@@ -135,6 +153,27 @@ test('February in a leap year expands to the 29th (#11)', () => {
 test('a full ISO date passes through unchanged (#11 idempotent)', () => {
   const q = buildAdvancedQuery({ dateFrom: '1939-03-15', dateTo: '1945-08-06' });
   assert.equal(q, 'date:[1939-03-15 TO 1945-08-06]');
+});
+
+test('single-digit YYYY-M-D day is zero-padded too (L1)', () => {
+  // Previously only single-digit MONTHS were padded; a single-digit day passed
+  // through as 1940-03-5, producing an invalid Lucene range.
+  const q = buildAdvancedQuery({ dateFrom: '1940-3-5' });
+  assert.equal(q, 'date:[1940-03-05 TO *]');
+});
+
+test('a non-date junk bound is dropped rather than producing an invalid range (L1)', () => {
+  // "abc" isn't a year/month/date → it must not leak into date:[abc TO ...].
+  const q = buildAdvancedQuery({ dateFrom: 'abc', dateTo: '1945' });
+  assert.equal(q, 'date:[* TO 1945-12-31]', 'junk from-bound dropped to wildcard');
+});
+
+test('a bogus month (13) is dropped; with no valid bound there is no date clause (L1)', () => {
+  // 1940-13 is invalid → dropped. With both bounds blank/dropped, no date clause
+  // is emitted (so it doesn't collapse to date:[* TO *]).
+  assert.equal(buildAdvancedQuery({ dateFrom: '1940-13' }), '*:*');
+  // A valid other bound still works alongside a dropped junk bound.
+  assert.equal(buildAdvancedQuery({ dateFrom: '1940-13', dateTo: '1945' }), 'date:[* TO 1945-12-31]');
 });
 
 /* ----------------------------- free text ---------------------------------- */

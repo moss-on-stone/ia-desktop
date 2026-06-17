@@ -56,6 +56,14 @@
    * search. A basic search's query text is preserved as the `text` field.
    */
   function applyFacetToSearch(search, field, value) {
+    // Ignore a blank value (M3) — folding '' in would create subject:[''] or a
+    // malformed year range like date:[-01-01 TO -12-31]. Return the search
+    // unchanged (normalized to advanced if it was basic).
+    if (value == null || String(value).trim() === '') {
+      if (search && search.type === 'advanced') return { type: 'advanced', fields: { ...(search.fields || {}) } };
+      const text = (search && search.q) || '';
+      return text ? { type: 'advanced', fields: { text } } : { type: 'advanced', fields: {} };
+    }
     const base =
       search && search.type === 'advanced'
         ? { ...(search.fields || {}) }
