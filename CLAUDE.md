@@ -1,9 +1,9 @@
 # IA Desktop — project instructions
 
-## After fixing anything: bump, commit, rebuild
+## After fixing anything: bump, commit, rebuild, RELEASE
 
 Whenever a bug is fixed, an issue is resolved, or a change is verified working,
-ALWAYS do all three of the following, in order, without being asked:
+ALWAYS do all of the following, in order, without being asked:
 
 1. **Bump** the version by 0.0.1 (patch) in `package.json` (`version`). The
    `USER_AGENT` is now **derived** from this version in
@@ -17,9 +17,25 @@ ALWAYS do all three of the following, in order, without being asked:
    dist/*.dmg dist/*.blockmap; rm -rf dist/mac dist/mac-arm64`) so old-version
    DMGs don't linger. This local `--mac` build is just a dev-time refresh of
    `dist/` for spot-checking the packaged app — it is NOT how releases ship.
+4. **Release**: push `main`, then tag and push `v<version>` so the Release
+   GitHub Action builds + publishes the installers (see below). **A version bump
+   means a release** — every patch bump gets its matching `v*` tag; do not leave
+   a bumped-but-unreleased version sitting on `main`. Concretely:
+   ```bash
+   git push origin main
+   git tag v<version> && git push origin v<version>   # e.g. v0.1.31
+   ```
+   Then confirm the Action ran and the GitHub Release exists
+   (`gh release list`). This is the ONE outward-facing step here, but it is part
+   of the standard ritual — bumping without releasing is the bug this rule fixes.
+   (If the user has explicitly said to hold the push/release for a later batch,
+   honor that; otherwise release as part of the bump.)
 
 > Note: bumping the version alone does NOT update `dist/` — the local installers
 > must be rebuilt explicitly, or `dist/` keeps serving the old version.
+
+> Note: the LOCAL `--mac` build is just for spot-checking; it does NOT publish a
+> release. Only pushing the `v<version>` tag (step 4) ships the real installers.
 
 > **Do NOT build `--win` locally.** Windows installers (and the official macOS
 > ones) are produced by the **Release GitHub Action**, each on its NATIVE runner
@@ -48,8 +64,15 @@ Installers are built in CI, not by hand. Two workflows in `.github/workflows/`:
 So the **release flow** is: bump + commit (steps 1–2 above) → push a `v<version>`
 tag → the Release Action builds and publishes Windows + macOS installers. Don't
 hand-build `--win`; tag instead (or trigger `release.yml` via `workflow_dispatch`
-for installers without cutting a Release). Tagging/pushing a release is an
-outward-facing action — do it only when the user explicitly asks.
+for installers without cutting a Release).
+
+**Every version bump gets released** — pushing the `v<version>` tag is the normal
+final step of the after-fix ritual (step 4 above), not a separate occasion to
+wait for. A bumped version that never gets a tag is a mistake. The only time to
+hold the tag is when the user has explicitly said to batch/defer the release; in
+that case, release as soon as that hold is lifted. (A release publishes
+installers publicly, so if anything is genuinely uncertain, confirm — but the
+default for a clean, tested, bumped commit is: tag and release.)
 
 ## Red/green TDD (always)
 
