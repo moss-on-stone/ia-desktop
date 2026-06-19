@@ -403,8 +403,9 @@
    */
   function aboutContent() {
     const link = (text, url) => ({ text, url });
+    // No leading "About" heading here — the About panel already renders an
+    // <h2>About</h2> page title; adding one would show "About" twice.
     return [
-      { type: 'heading', text: 'About' },
       {
         type: 'para',
         segments: [

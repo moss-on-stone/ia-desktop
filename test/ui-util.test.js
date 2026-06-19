@@ -486,7 +486,11 @@ test('aboutContent returns headings and paragraphs with link segments', () => {
     if (b.type === 'heading') assert.equal(typeof b.text, 'string');
     if (b.type === 'para') assert.ok(Array.isArray(b.segments));
   }
-  assert.ok(blocks.some((b) => b.type === 'heading' && /about/i.test(b.text)), 'has an About heading');
+  // The "Other Notes" section heading is part of the content...
+  assert.ok(blocks.some((b) => b.type === 'heading' && /other notes/i.test(b.text)), 'has the Other Notes heading');
+  // ...but NOT a redundant "About" heading — the panel's <h2>About</h2> is the
+  // page title, so a duplicate here would render "About" twice.
+  assert.ok(!blocks.some((b) => b.type === 'heading' && /^about$/i.test(b.text.trim())), 'no duplicate About heading');
 });
 
 test('aboutContent links point at the right archive.org / GitHub URLs', () => {
