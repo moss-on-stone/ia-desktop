@@ -1,9 +1,13 @@
 name: Release
 
 # Build installers on a version tag (e.g. v0.1.18) and attach them to a GitHub
-# Release. Windows and macOS each build on their NATIVE runner — no Wine, no
-# cross-compilation — so the artifacts are exactly what `electron-builder` would
-# produce on that OS locally.
+# Release. Windows, macOS, and Linux each build on their NATIVE runner — no Wine,
+# no cross-compilation — so the artifacts are exactly what `electron-builder`
+# would produce on that OS locally.
+#
+# NOTE: the Linux AppImage is built and published but is currently UNTESTED on
+# real Linux hardware (CI runs the test suite on Linux, but no one has verified
+# the packaged AppImage runs end-to-end). Provided as a convenience.
 on:
   push:
     tags:
@@ -30,6 +34,10 @@ jobs:
             name: macOS installers
             build: npx electron-builder --mac --publish never
             artifact: dist/*.dmg
+          - os: ubuntu-latest
+            name: Linux AppImage (untested)
+            build: npx electron-builder --linux --publish never
+            artifact: dist/*.AppImage
 
     steps:
       - uses: actions/checkout@v4
@@ -81,5 +89,6 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.dmg
+            artifacts/**/*.AppImage
           generate_release_notes: true
           fail_on_unmatched_files: true

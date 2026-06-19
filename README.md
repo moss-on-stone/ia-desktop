@@ -71,6 +71,14 @@ once.
    installer (you can choose the install folder).
 3. Launch **Grimmia** from the Start menu or desktop shortcut.
 
+### Linux (untested)
+A portable **AppImage** is published with each release. **Note:** the Linux build
+is currently **untested** — the test suite runs on Linux in CI, but no one has
+verified the packaged AppImage end-to-end, so treat it as experimental.
+1. Download `Grimmia-<version>.AppImage`.
+2. Make it executable: `chmod +x Grimmia-*.AppImage`.
+3. Run it: `./Grimmia-*.AppImage`.
+
 > For wide distribution, add an Apple Developer ID / Windows code-signing
 > certificate — see **Building** below.
 
